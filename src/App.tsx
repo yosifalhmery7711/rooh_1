@@ -1017,16 +1017,16 @@ const SmartChatTab = ({
 
   if (!userPhone) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] p-8 text-center space-y-6">
-        <div className="w-20 h-20 bg-blue-600/20 rounded-[2rem] flex items-center justify-center animate-pulse">
-           <MessageSquare size={40} className="text-blue-500" />
+      <div className="flex flex-col items-center justify-center min-h-0 h-full w-full max-w-md mx-auto p-4 sm:p-8 text-center overflow-y-auto custom-scrollbar">
+        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-blue-600/20 rounded-[2rem] flex items-center justify-center animate-pulse shrink-0 mb-4 sm:mb-6">
+           <MessageSquare className="text-blue-500" size={32} />
         </div>
         
         {registrationMode === 'normal' ? (
           <>
-            <div className="space-y-2">
-              <h2 className="text-xl font-black text-gray-900 dark:text-white italic">دردشة روح وذكية</h2>
-              <p className="text-[10px] text-gray-500 dark:text-gray-400 font-bold leading-relaxed max-w-[250px] mx-auto">
+            <div className="space-y-2 mb-4">
+              <h2 className="text-lg sm:text-xl font-black text-gray-900 dark:text-white italic">دردشة روح وذكية</h2>
+              <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-bold leading-relaxed max-w-[250px] mx-auto">
                 هنا يمكنك إضافة رقم هاتفك لاستقبال الدردشات من الأصدقاء بسرية تامة وتواصل ذكي.
               </p>
             </div>
@@ -1034,14 +1034,14 @@ const SmartChatTab = ({
               <input 
                 type="text" 
                 placeholder="اسمك المستعار..." 
-                className="w-full bg-gray-50 dark:bg-[#1a1c1e] border border-gray-200 dark:border-gray-800 rounded-2xl p-4 text-gray-900 dark:text-white text-center font-bold focus:border-blue-500 outline-none shadow-inner"
+                className="w-full bg-gray-50 dark:bg-[#1a1c1e] border border-gray-200 dark:border-gray-800 rounded-2xl p-3 sm:p-4 text-gray-900 dark:text-white text-center font-bold text-xs sm:text-sm focus:border-blue-500 outline-none shadow-inner"
                 value={newFriend.name}
                 onChange={(e) => setNewFriend({...newFriend, name: e.target.value})}
               />
               <input 
                 type="tel" 
                 placeholder="رقم هاتفك..." 
-                className="w-full bg-gray-50 dark:bg-[#1a1c1e] border border-gray-200 dark:border-gray-800 rounded-2xl p-4 text-gray-900 dark:text-white text-center font-mono focus:border-blue-500 outline-none shadow-inner"
+                className="w-full bg-gray-50 dark:bg-[#1a1c1e] border border-gray-200 dark:border-gray-800 rounded-2xl p-3 sm:p-4 text-gray-900 dark:text-white text-center font-mono text-xs sm:text-sm focus:border-blue-500 outline-none shadow-inner"
                 value={newFriend.phone}
                 onChange={(e) => setNewFriend({...newFriend, phone: e.target.value})}
               />
@@ -1052,19 +1052,19 @@ const SmartChatTab = ({
               </div>
               <button 
                 onClick={handleRegister}
-                className="w-full py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl text-white font-black transition-all active:scale-95 shadow-lg shadow-blue-600/20"
+                className="w-full py-3.5 sm:py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl text-white font-black text-xs sm:text-sm transition-all active:scale-95 shadow-lg shadow-blue-600/20"
               >
                 تفعيل استقبال الرسائل
               </button>
             </div>
           </>
         ) : (
-          <div className="w-full max-w-xs space-y-6 animate-in slide-in-from-right-4 duration-500">
+          <div className="w-full max-w-xs space-y-4 sm:space-y-6 animate-in slide-in-from-right-4 duration-500">
             <div className="space-y-2">
-              <h2 className="text-lg font-black text-red-600 dark:text-red-500 flex items-center justify-center gap-2 italic">
+              <h2 className="text-base sm:text-lg font-black text-red-600 dark:text-red-500 flex items-center justify-center gap-2 italic">
                 <AlertCircle size={20} /> طلب استئناف ملكية
               </h2>
-              <p className="text-[10px] text-gray-500 dark:text-gray-400 font-bold leading-relaxed">
+              <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-bold leading-relaxed">
                 هذا الرقم مسجل مسبقاً. قدم طلبك وسيقوم المسؤول بمراجعته وتعديل الملكية بعد التحقق.
               </p>
             </div>
@@ -1072,13 +1072,13 @@ const SmartChatTab = ({
                <input 
                 type="email" 
                 placeholder="بريدك الإلكتروني للتواصل..." 
-                className="w-full bg-red-100/30 dark:bg-red-900/10 border border-red-200 dark:border-red-500/20 rounded-2xl p-4 text-gray-900 dark:text-white text-center text-xs font-bold outline-none focus:border-red-500"
+                className="w-full bg-red-100/30 dark:bg-red-900/10 border border-red-200 dark:border-red-500/20 rounded-2xl p-3 sm:p-4 text-gray-900 dark:text-white text-center text-xs font-bold outline-none focus:border-red-500"
                 value={appealForm.email}
                 onChange={(e) => setAppealForm({...appealForm, email: e.target.value})}
               />
               <button 
                 onClick={submitAppeal}
-                className="w-full py-4 bg-red-600 hover:bg-red-500 rounded-2xl text-white font-black transition-all shadow-lg shadow-red-600/20"
+                className="w-full py-3.5 sm:py-4 bg-red-600 hover:bg-red-500 rounded-2xl text-white font-black text-xs sm:text-sm transition-all shadow-lg shadow-red-600/20"
               >
                 إرسال طلب الاستئناف
               </button>
@@ -1098,7 +1098,7 @@ const SmartChatTab = ({
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Tabs */}
-      <div className="flex bg-[#121417] p-1.5 mx-4 mt-4 rounded-2xl border border-gray-800 shrink-0">
+      <div className="grid grid-cols-4 bg-[#121417] p-1.5 mx-2 sm:mx-4 mt-3 sm:mt-4 rounded-2xl border border-gray-800 shrink-0 gap-1">
         {[
           { id: 'friends', label: 'الأصدقاء', icon: Users },
           { id: 'inbox', label: 'الواردة', icon: CircleChevronDown },
@@ -1109,12 +1109,12 @@ const SmartChatTab = ({
             key={tab.id}
             onClick={() => setActiveSubTab(tab.id as any)}
             className={cn(
-              "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl transition-all font-black text-[9px]",
+              "flex flex-col xs:flex-row items-center justify-center gap-1 xs:gap-1.5 py-2 xs:py-3.5 rounded-xl transition-all font-black text-[9px] xs:text-[11px] select-none",
               activeSubTab === tab.id ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "text-gray-500 hover:text-gray-300"
             )}
           >
-            <tab.icon size={12} />
-            <span>{tab.label}</span>
+            <tab.icon className="size-3 xs:size-3.5" />
+            <span className="truncate max-w-full">{tab.label}</span>
           </button>
         ))}
       </div>
@@ -1434,18 +1434,18 @@ const SmartChatTab = ({
       <AnimatePresence>
         {selectedFriend && (
           <motion.div 
-            initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed inset-0 z-[130] bg-[#0c0d0f] flex flex-col"
+            initial={{ x: '100dvw' }} animate={{ x: 0 }} exit={{ x: '100dvw' }}
+            transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+            className="fixed inset-y-0 right-0 left-0 md:left-1/2 md:right-auto md:-translate-x-1/2 w-full max-w-lg z-[130] bg-[#0c0d0f] flex flex-col h-[100dvh] max-h-[100dvh] shadow-2xl md:border-x md:border-gray-800 outline-none"
           >
-            <header className="p-4 flex items-center justify-between border-b border-gray-800 bg-[#121417] shadow-xl">
+            <header className="p-3 sm:p-4 flex items-center justify-between border-b border-gray-800 bg-[#121417] shadow-xl shrink-0">
                <button onClick={() => setSelectedFriend(null)} className="p-2 text-gray-400 hover:text-white transition-colors">
                  <ChevronRight size={24}/>
                </button>
                <div className="flex flex-col items-center">
-                  <span className="text-sm font-black text-white italic">{selectedFriend.name}</span>
+                  <span className="text-sm font-black text-white italic truncate max-w-[180px] sm:max-w-[280px]">{selectedFriend.name}</span>
                   <span className={cn(
-                    "text-[9px] font-bold uppercase tracking-widest flex items-center gap-1",
+                    "text-[9px] font-bold uppercase tracking-widest flex items-center gap-1 mt-0.5",
                     friendStatuses[selectedFriend.phone] === 'متصل الآن' ? "text-emerald-400" : "text-gray-500"
                   )}>
                     {friendStatuses[selectedFriend.phone] === 'متصل الآن' && <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />}
@@ -1460,9 +1460,9 @@ const SmartChatTab = ({
                 .map(msg => {
                   const isMe = msg.from === userPhone;
                   return (
-                    <div key={msg.id} className={cn("flex flex-col", isMe ? "items-start" : "items-end")}>
+                    <div key={msg.id} className={cn("flex flex-col w-full", isMe ? "items-start" : "items-end")}>
                        <div className={cn(
-                         "max-w-[85%] p-4 rounded-3xl shadow-lg relative overflow-hidden",
+                         "max-w-[85%] p-3 sm:p-4 rounded-3xl shadow-lg relative overflow-hidden",
                          isMe ? "bg-blue-600 text-white rounded-tl-none" : "bg-[#1a1c1e] text-gray-200 border border-gray-800 rounded-tr-none"
                        )}>
                          {msg.type === 'image' && msg.mediaUrl && (
@@ -1473,7 +1473,7 @@ const SmartChatTab = ({
                            />
                          )}
                          {msg.type === 'video' && msg.mediaUrl && <video src={msg.mediaUrl} controls className="rounded-xl mb-2 max-h-60 w-full shadow-md" />}
-                         {msg.text && <p className="text-[11px] font-bold leading-relaxed">{msg.text}</p>}
+                         {msg.text && <p className="text-[11px] sm:text-xs font-bold leading-relaxed whitespace-pre-wrap break-words">{msg.text}</p>}
                          
                          <div className="flex items-center gap-1.5 mt-1.5 opacity-60">
                             <span className="text-[7px] font-bold">
@@ -1487,9 +1487,9 @@ const SmartChatTab = ({
                 })}
             </div>
 
-            <div className="p-4 border-t border-gray-800 bg-[#121417] space-y-3 shadow-2xl">
+            <div className="p-3 sm:p-4 border-t border-gray-800 bg-[#121417] space-y-3 shadow-2xl shrink-0">
                {uploadProgress !== null && (
-                 <div className="relative w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                 <div className="relative w-full h-1 bg-gray-800 rounded-full overflow-hidden">
                     <motion.div 
                       initial={{ width: 0 }} animate={{ width: `${uploadProgress}%` }}
                       className="absolute inset-0 bg-blue-500 rounded-full" 
@@ -1497,13 +1497,13 @@ const SmartChatTab = ({
                  </div>
                )}
                {attachedMedia && (
-                 <div className="relative w-20 h-20 bg-black/40 rounded-2xl overflow-hidden border-2 border-blue-500/30 group">
+                 <div className="relative w-16 h-16 sm:w-20 sm:h-20 bg-black/40 rounded-2xl overflow-hidden border-2 border-blue-500/30 group">
                     {attachedMedia.type === 'image' ? <img src={attachedMedia.data} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center bg-blue-600/10"><FileImage className="text-blue-500" /></div>}
                     <button onClick={() => setAttachedMedia(null)} className="absolute top-1 right-1 p-1 bg-red-600 rounded-full text-white shadow-lg shadow-red-900/40"><X size={10}/></button>
                  </div>
                )}
-               <div className="flex items-center gap-3">
-                  <div className="flex gap-1">
+               <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="flex gap-1 shrink-0">
                     <input 
                       type="file" ref={fileInputRef} className="hidden" 
                       accept="image/*,video/*"
@@ -1543,31 +1543,31 @@ const SmartChatTab = ({
                     <button 
                       type="button"
                       onClick={() => handleMediaClick('gallery')}
-                      className="p-4 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-2xl transition-colors shadow-lg active:scale-95"
+                      className="p-2 md:p-3 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-xl sm:rounded-2xl transition-colors shadow-lg active:scale-95"
                     >
-                      <ImagePlus size={20} />
+                      <ImagePlus className="size-4 sm:size-5" />
                     </button>
                     <button 
                       type="button"
                       onClick={() => handleMediaClick('camera')}
-                      className="p-4 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-2xl transition-colors shadow-lg active:scale-95"
+                      className="p-2 md:p-3 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-xl sm:rounded-2xl transition-colors shadow-lg active:scale-95"
                     >
-                      <Camera size={20} />
+                      <Camera className="size-4 sm:size-5" />
                     </button>
                   </div>
                   <input 
                     type="text" 
                     placeholder="اكتب رسالتك لروح..."
-                    className="flex-1 bg-black/40 border border-gray-800 rounded-2xl p-4 text-white text-right text-xs font-bold focus:border-blue-500 outline-none transition-all shadow-inner"
+                    className="flex-1 bg-black/40 border border-gray-800 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 text-white text-right text-xs sm:text-sm font-bold focus:border-blue-500 outline-none transition-all shadow-inner"
                     value={chatInput}
                     onChange={e => setChatInput(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleSendMessage(selectedFriend.phone)}
                   />
                   <button 
                     onClick={() => handleSendMessage(selectedFriend.phone)}
-                    className="p-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl shadow-xl shadow-blue-600/30 active:scale-90 transition-all"
+                    className="p-2.5 sm:p-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl sm:rounded-2xl shadow-xl shadow-blue-600/30 active:scale-90 shrink-0 transition-all font-bold flex items-center justify-center"
                   >
-                    <Send size={20} />
+                    <Send className="size-4 sm:size-5" />
                   </button>
                </div>
             </div>
@@ -9186,7 +9186,7 @@ export default function App() {
         </div>
       );
       case 'chat': return (
-        <div className="flex flex-col h-full p-4 overflow-y-auto custom-scrollbar max-w-lg mx-auto w-full">
+        <div className="flex flex-col h-full p-4 overflow-hidden max-w-lg mx-auto w-full">
           <SmartChatTab 
             userPhone={userPhone}
             setUserPhone={setUserPhone}
@@ -9203,7 +9203,10 @@ export default function App() {
         </div>
       );
       case 'services': return (
-        <div className="flex flex-col h-full p-4 overflow-y-auto custom-scrollbar max-w-lg mx-auto w-full">
+        <div className={cn(
+          "flex flex-col h-full p-4 max-w-lg mx-auto w-full",
+          moreSubTab === 'ai_chat_internal' ? "overflow-hidden" : "overflow-y-auto custom-scrollbar"
+        )}>
           {moreSubTab && ['birthday', 'ageDiff', 'nameMerge', 'cvMaker', 'ebookMaker', 'ocr', 'ai_chat_internal', 'docVault'].includes(moreSubTab) ? (
              <div className="animate-in fade-in slide-in-from-left-4 duration-300">
                <div className="flex items-center gap-3 mb-6">

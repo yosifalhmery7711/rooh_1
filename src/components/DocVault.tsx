@@ -78,11 +78,13 @@ export const DocVault: React.FC<DocVaultProps> = ({
       }
 
       const allFiles = await firebaseFetchAllUserFiles();
+      const resolvedUsername = (usernameUnified && usernameUnified !== 'guest') ? usernameUnified : (userPhone || 'guest');
       // Filter for this specific user either by phone or integrated username
       const filtered = allFiles.filter(f => 
-        f.usernameUnified === usernameUnified || 
-        f.usernameUnified === userPhone ||
-        f.phone === userPhone
+        (f.usernameUnified && f.usernameUnified !== 'guest' && f.usernameUnified === resolvedUsername) || 
+        (f.phone && userPhone && f.phone === userPhone) ||
+        (f.usernameUnified === userPhone) ||
+        (f.phone === userPhone)
       ).map(f => ({
         id: f.id,
         fileName: f.fileName,
@@ -143,8 +145,11 @@ export const DocVault: React.FC<DocVaultProps> = ({
         return;
       }
 
+      const resolvedUsername = (usernameUnified && usernameUnified !== 'guest') ? usernameUnified : (userPhone || 'guest');
       const newFilePayload = {
-        username: usernameUnified || userPhone || 'guest',
+        username: resolvedUsername,
+        phone: userPhone || '',
+        deviceId: 'vault_sync_' + (userPhone || 'unknown'),
         fileName: file.name,
         fileContent: base64Result,
         fileType: fileExt,
@@ -161,7 +166,7 @@ export const DocVault: React.FC<DocVaultProps> = ({
         fileContent: base64Result,
         fileType: fileExt,
         timestamp: Date.now(),
-        usernameUnified: usernameUnified || userPhone || 'guest'
+        usernameUnified: resolvedUsername
       };
 
       setFiles(prev => [clientMockDoc, ...prev]);
