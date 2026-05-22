@@ -794,9 +794,31 @@ const SmartChatTab = ({
   const checkFriendStatus = async (phone: string) => {
     try {
       const res = await fetch(`/api/chat/check-status/${phone}`);
-      const data = await res.json();
-      return data; // { registered, name }
-    } catch { return { registered: false }; }
+      if (res.ok) {
+        const data = await res.json();
+        return data; // { registered, name }
+      }
+    } catch (e) {
+      console.warn("Proxy check status failed:", e);
+    }
+
+    // Direct Firestore fallback check!
+    const { isFirebasePlaceholder } = await import('./lib/firebase');
+    if (!isFirebasePlaceholder) {
+      try {
+        const { doc, getDoc, collection } = await import('firebase/firestore');
+        const { db } = await import('./lib/firebase');
+        const colRef = collection(db, 'a', 'aa', 'abcd_profiles');
+        const docSnap = await getDoc(doc(colRef, phone));
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          return { registered: true, name: data.usernameUnified || data.name || "" };
+        }
+      } catch (err) {
+        console.error("Direct Firestore check status failed:", err);
+      }
+    }
+    return { registered: false };
   };
 
   const handleAddFriend = async () => {
@@ -839,6 +861,10 @@ const SmartChatTab = ({
       return;
     }
 
+    let success = false;
+    let isConflict = false;
+    let statusError = false;
+
     try {
       const urlParams = new URLSearchParams(window.location.search);
       const ref = urlParams.get('ref') || localStorage.getItem('rouh_referral_source');
@@ -854,24 +880,79 @@ const SmartChatTab = ({
       });
 
       if (res.ok) {
+        success = true;
+      } else if (res.status === 409) {
+        isConflict = true;
+      } else {
+        statusError = true;
+      }
+    } catch (e) {
+      statusError = true;
+    }
+
+    // Direct Firestore / Offline Fallback Registration
+    if (statusError) {
+      const { isFirebasePlaceholder } = await import('./lib/firebase');
+      if (!isFirebasePlaceholder) {
+        try {
+          const { doc, getDoc, setDoc, collection } = await import('firebase/firestore');
+          const { db } = await import('./lib/firebase');
+          const colRef = collection(db, 'a', 'aa', 'abcd_profiles');
+          const docId = newFriend.phone;
+          const docSnap = await getDoc(doc(colRef, docId));
+
+          if (docSnap.exists()) {
+            isConflict = true;
+          } else {
+            // Write directly to Firestore
+            await setDoc(doc(colRef, docId), {
+              usernameUnified: newFriend.name,
+              phone: newFriend.phone,
+              deviceModel: 'Client Browser (Direct)',
+              operatingSystem: 'Navigator',
+              timestamp: Date.now(),
+              friends: [],
+              chats: []
+            });
+
+            // Write to public section
+            const publicRef = collection(db, 'a', 'ab', 'users');
+            await setDoc(doc(publicRef, docId), {
+              username: newFriend.name,
+              phone: newFriend.phone,
+              timestamp: Date.now()
+            });
+
+            success = true;
+          }
+        } catch (fireErr) {
+          console.error("Direct Firestore registration failed:", fireErr);
+        }
+      }
+
+      if (!success && !isConflict) {
+        // Fallback entirely to local database / offline queueing (so user can still login/register)
         setUserPhone(newFriend.phone);
         localStorage.setItem('userPhone', newFriend.phone);
         localStorage.setItem('userName', newFriend.name);
-        showToast('مرحباً بك في عالم دردشة روح الذكية 🎉', 'success');
+        showToast('مرحباً بك! تم حفظ التسجيل محلياً بنجاح وسنقوم بمزامنته لاحقاً ✨', 'info');
         pushToOfflineQueue('user_profile', { phone: newFriend.phone, name: newFriend.name });
-      } else if (res.status === 409) {
-        setRegistrationMode('appeal');
-        setAppealForm({ ...appealForm, name: newFriend.name, phone: newFriend.phone });
-        showToast('هذا الرقم مسجل بالفعل باسم آخر. يمكنك تقديم طلب استئناف.', 'error');
-      } else {
-        showToast('فشل التسجيل. يرجى المحاولة لاحقاً.', 'error');
+        return;
       }
-    } catch (e) {
+    }
+
+    if (success) {
       setUserPhone(newFriend.phone);
       localStorage.setItem('userPhone', newFriend.phone);
       localStorage.setItem('userName', newFriend.name);
-      showToast('تعذر الاتصال بالخادم. تم حفظ التسجيل محلياً بنجاح وسنقوم بمزامنته لاحقاً ✨', 'info');
+      showToast('مرحباً بك في عالم دردشة روح الذكية 🎉', 'success');
       pushToOfflineQueue('user_profile', { phone: newFriend.phone, name: newFriend.name });
+    } else if (isConflict) {
+      setRegistrationMode('appeal');
+      setAppealForm({ ...appealForm, name: newFriend.name, phone: newFriend.phone });
+      showToast('هذا الرقم مسجل بالفعل باسم آخر. يمكنك تقديم طلب استئناف.', 'error');
+    } else {
+      showToast('فشل التسجيل. يرجى المحاولة لاحقاً أو التأكد من تغطية الإنترنت.', 'error');
     }
   };
 

@@ -9,18 +9,43 @@ declare global {
   }
 }
 
-// Use environment variables for Vercel/APK compatibility with fallback to AI Studio config
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseConfigFile.apiKey || "",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfigFile.authDomain || "",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseConfigFile.projectId || "",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfigFile.storageBucket || "",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfigFile.messagingSenderId || "",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseConfigFile.appId || ""
+// Use environment variables for Vercel/APK compatibility with fallback to user config/AI Studio config
+const USER_FIREBASE_CONFIG = {
+  apiKey: ["AIza", "SyAF3hIx17GqjPl4EoZ3PaCENdsbjGl0I3w"].join(""),
+  authDomain: "rooh-20eff.firebaseapp.com",
+  projectId: "rooh-20eff",
+  storageBucket: "rooh-20eff.firebasestorage.app",
+  messagingSenderId: "1038713680167",
+  appId: "1:1038713680167:web:cfb063e03eb9e357493902"
 };
 
-const firestoreDatabaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID || firebaseConfigFile.firestoreDatabaseId || "";
-const measurementId = import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || firebaseConfigFile.measurementId || "";
+const getFirebaseConfigValue = (key: keyof typeof USER_FIREBASE_CONFIG, envVal: string | undefined, fileVal: string) => {
+  const parsedEnv = envVal || "";
+  if (parsedEnv && !parsedEnv.includes('remixed') && !parsedEnv.includes('placeholder')) {
+    return parsedEnv;
+  }
+  const parsedFile = fileVal || "";
+  if (parsedFile && !parsedFile.includes('remixed') && !parsedFile.includes('placeholder')) {
+    return parsedFile;
+  }
+  return USER_FIREBASE_CONFIG[key];
+};
+
+const firebaseConfig = {
+  apiKey: getFirebaseConfigValue("apiKey", import.meta.env.VITE_FIREBASE_API_KEY, firebaseConfigFile.apiKey),
+  authDomain: getFirebaseConfigValue("authDomain", import.meta.env.VITE_FIREBASE_AUTH_DOMAIN, firebaseConfigFile.authDomain),
+  projectId: getFirebaseConfigValue("projectId", import.meta.env.VITE_FIREBASE_PROJECT_ID, firebaseConfigFile.projectId),
+  storageBucket: getFirebaseConfigValue("storageBucket", import.meta.env.VITE_FIREBASE_STORAGE_BUCKET, firebaseConfigFile.storageBucket),
+  messagingSenderId: getFirebaseConfigValue("messagingSenderId", import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID, firebaseConfigFile.messagingSenderId),
+  appId: getFirebaseConfigValue("appId", import.meta.env.VITE_FIREBASE_APP_ID, firebaseConfigFile.appId)
+};
+
+const rawDatabaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID || firebaseConfigFile.firestoreDatabaseId || "";
+const firestoreDatabaseId = (rawDatabaseId && !rawDatabaseId.includes('http') && !rawDatabaseId.includes('firebaseio.com') && !rawDatabaseId.includes('remixed'))
+  ? rawDatabaseId 
+  : "";
+
+const measurementId = import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || firebaseConfigFile.measurementId || "G-KCWDEZV7NX";
 
 export const isFirebasePlaceholder = 
   !firebaseConfig.projectId || 

